@@ -1,35 +1,31 @@
 require('dotenv').config();
-const { Bot } = require("grammy");
+const { Bot, session } = require("grammy");
+const { conversations, createConversation } = require("@grammyjs/conversations");
 const mongoose = require("mongoose");
 const http = require("http");
 
-// Підключення до MongoDB
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ База даних успішно підключена"))
-    .catch(err => {
-        console.error("❌ Помилка підключення до БД:", err.message);
-        process.exit(1); // Зупиняємо процес, якщо БД не доступна
-    });
+const { registrationConversation, addPillConversation } = require("./controllers/userController");
+const setupRoutes = require("./routes/botRoutes");
 
-// Ініціалізація бота
 const bot = new Bot(process.env.BOT_TOKEN);
 
-// Обробник команди /start
-bot.command("start", async (ctx) => {
-    await ctx.reply("Привіт! Я - твій розумний бокс для ліків. Я допоможу тобі не забувати приймати ліки вчасно. Використовуй команди, щоб налаштувати нагадування та керувати своїми ліками.");
-});
+// Налаштування сесій та розмов
+bot.use(session({ initial: () => ({}) }));
+bot.use(conversations());
+bot.use(createConversation(registrationConversation));
+bot.use(createConversation(addPillConversation));
+
+// Підключення до БД
+mongoose.connect(process.env.MONGO_URI)
+    .then(() => console.log("✅ MongoDB Connected"))
+    .catch(err => console.error("❌ DB Error:", err));
+
+// Шляхи
+setupRoutes(bot);
 
 // Запуск бота
-bot.start();
-console.log("🚀 Бот запущений...");
+bot.start().catch(err => console.error("Bot Error:", err));
+console.log("🚀 Сервер та бот запущені...");
 
-// Створення HTTP сервера для моніторингу стану
-const PORT = process.env.PORT || 3000;
-const server = http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Smart Pill Box Server is running');
-});
-// Запуск сервера
-server.listen(PORT, () => {
-    console.log(`🌐 Сервер слухає порт ${PORT}`);
-});
+// HTTP сервер для підтримки активності на Render
+http.createServer((req, res) => res.end("Bot is alive")).listen(process.env.PORT || 3000);
