@@ -17,7 +17,7 @@ bot.command("start", async (ctx) => {
             inline_keyboard: [[
                 { 
                     text: "🔗 Підключити пристрій", 
-                    web_app: { url: "https://your-github-io-link.com" } // Твій сайт з п.3
+                    web_app: { url: "https://sashatatu.github.io/Smart_pill_box_pages/" } // Твій сайт з п.3
                 }
             ]]
         }
