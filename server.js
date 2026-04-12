@@ -3,58 +3,50 @@ const { Bot, session } = require("grammy");
 const { conversations, createConversation } = require("@grammyjs/conversations");
 const mongoose = require("mongoose");
 const http = require("http");
-const url = require("url"); // Додаємо для парсингу URL
-
-const { registrationConversation, addPillConversation } = require("./controllers/userController");
-const setupRoutes = require("./routes/botRoutes");
+const url = require("url");
 
 const bot = new Bot(process.env.BOT_TOKEN);
 
 bot.use(session({ initial: () => ({}) }));
 bot.use(conversations());
-bot.use(createConversation(registrationConversation));
-bot.use(createConversation(addPillConversation));
 
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log("✅ MongoDB Connected"))
-    .catch(err => console.error("❌ DB Error:", err));
+// Команда Старт з кнопкою Web App
+bot.command("start", async (ctx) => {
+    await ctx.reply("Вітаю! Натисніть кнопку нижче, щоб підключити вашу таблетницю через Bluetooth.", {
+        reply_markup: {
+            inline_keyboard: [[
+                { 
+                    text: "🔗 Підключити пристрій", 
+                    web_app: { url: "https://your-github-io-link.com" } // Твій сайт з п.3
+                }
+            ]]
+        }
+    });
+});
 
-setupRoutes(bot);
-
-bot.start().catch(err => console.error("Bot Error:", err));
-
-// --- НОВА ЧАСТИНА: Обробка прив'язки пристрою ---
+// HTTP Сервер для прийому даних від Web App
 const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
 
-    // Ендпоінт для Web App, який отримав ID по Bluetooth
     if (req.method === "POST" && parsedUrl.pathname === "/api/bind-device") {
         let body = "";
         req.on("data", chunk => { body += chunk.toString(); });
         req.on("end", async () => {
-            try {
-                const { telegram_id, device_id } = JSON.parse(body);
+            const { telegram_id, device_id } = JSON.parse(body);
+            
+            // ТУТ ПЕРЕДАЙ ДАНІ РОЗРОБНИКУ PYTHON ДЛЯ NEO4J
+            console.log(`User ${telegram_id} linked to ${device_id}`);
 
-                // 1. Тут ви можете викликати функцію для запису в Neo4j через ваш Python API
-                // Або якщо Node.js має доступ до Neo4j, зробити запис прямо тут.
-                
-                console.log(`🔗 Прив'язка: Користувач ${telegram_id} -> Пристрій ${device_id}`);
-
-                // 2. Надсилаємо повідомлення користувачу в бот про успіх
-                await bot.api.sendMessage(telegram_id, `✅ Пристрій ${device_id} успішно підключено до вашого аккаунту!`);
-
-                res.writeHead(200, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ status: "ok" }));
-            } catch (err) {
-                res.writeHead(400);
-                res.end("Invalid JSON");
-            }
+            await bot.api.sendMessage(telegram_id, `✅ Пристрій ${device_id} успішно прив'язано!`);
+            
+            res.writeHead(200, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" });
+            res.end(JSON.stringify({ status: "ok" }));
         });
     } else {
-        res.end("Bot is alive");
+        res.end("Alive");
     }
 });
 
-server.listen(process.env.PORT || 3000, () => {
-    console.log("🚀 Сервер запущено, очікуємо на підключення пристроїв...");
-});
+mongoose.connect(process.env.MONGO_URI).then(() => console.log("✅ MongoDB Connected"));
+bot.start();
+server.listen(process.env.PORT || 3000);

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; }
+        button { background: #0088cc; color: white; padding: 15px 30px; border: none; border-radius: 10px; font-size: 18px; cursor: pointer; }
+        input { padding: 10px; margin: 10px; width: 80%; }
+    </style>
+</head>
+<body>
+    <h2>Налаштування таблетниці</h2>
+    <input type="text" id="ssid" placeholder="Назва вашого Wi-Fi">
+    <input type="password" id="pass" placeholder="Пароль">
+    <br><br>
+    <button onclick="setupDevice()">⚙️ ПІДКЛЮЧИТИ ТАБЛЕТНИЦЮ</button>
+
+    <script>
+        async function setupDevice() {
+            const ssid = document.getElementById('ssid').value;
+            const pass = document.getElementById('pass').value;
+            
+            try {
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'Smart Pill-box' }],
+                    optionalServices: ['4fafc201-1fb5-459e-8fcc-c5c9c331914b']
+                });
+
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService('4fafc201-1fb5-459e-8fcc-c5c9c331914b');
+
+                // 1. Отримуємо ID
+                const idChar = await service.getCharacteristic('beb5483e-36e1-4688-b7f5-ea07361b26a8');
+                const idVal = await idChar.readValue();
+                const deviceId = new TextDecoder().decode(idVal);
+
+                // 2. Відправляємо в Бот
+                const user = window.Telegram.WebApp.initDataUnsafe.user;
+                await fetch('https://your-bot-server.com/api/bind-device', {
+                    method: 'POST',
+                    body: JSON.stringify({ telegram_id: user.id, device_id: deviceId })
+                });
+
+                // 3. Відправляємо WiFi в ESP32
+                const wifiChar = await service.getCharacteristic('d11234e4-1234-4567-8910-1234567890ab');
+                await wifiChar.writeValue(new TextEncoder().encode(ssid + ":" + pass));
+
+                alert("Готово! Таблетниця підключається до мережі.");
+                window.Telegram.WebApp.close();
+            } catch (e) {
+                alert("Помилка: " + e);
+            }
+        }
+    </script>
+</body>
+</html>
